@@ -142,29 +142,6 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
                                                 font_ct, l_scale/200, (0, 255, 0))
                             num += 1
 
-                # for cnt in contours:
-                #     count_rec += 1
-                #     approx = cv2.approxPolyDP(cnt, 0.009 * cv2.arcLength(cnt, True), True)
-                #
-                #     # draws boundary of contours.
-                #     cv2.drawContours(img2, [approx], 0, (0, 0, 255), 3)
-                #
-                #     # Used to flat the array containing the co-ordinates of the vertices.
-                #     n = approx.ravel()
-                #     num = 0
-                #     for _ in n:
-                #         if num % 2 == 0:
-                #             x = n[num]
-                #             y = n[num + 1]
-                #
-                #             if num == 0:
-                #                 # text on topmost co-ordinate.
-                #                 cv2.putText(img2, str(count_rec), (x, y),
-                #                             font_ct, l_scale/200, (0, 255, 0))
-                #
-                #         num += 1
-                #
-
         cv2.imwrite('Circuit Board Layout with Conductor Numbers.png', img2)
         return contours
 
