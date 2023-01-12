@@ -51,21 +51,22 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
         # Resizing the ratio between L and W in pixels to the same as the ratio in true dimension
         if img.shape[1] >= img.shape[0]:
             # The length in pixels will keep unchanged while only resize the width pixels
-            width_scale = ((img.shape[1] / img.shape[0]) / (PWB_length_true / PWB_width_true))
-            img = cv2.resize(img, None, fx=1, fy=width_scale)
-            img2 = cv2.resize(img2, None, fx=1, fy=width_scale)
+            w_scale = ((img.shape[1] / img.shape[0]) / (PWB_length_true / PWB_width_true))
+            img = cv2.resize(img, None, fx=1, fy=w_scale)
+            img2 = cv2.resize(img2, None, fx=1, fy=w_scale)
 
         else:
             # The width in pixels will keep unchanged while only resize the length pixels
-            length_scale = ((img.shape[0] / img.shape[1]) / (PWB_width_true / PWB_length_true))
-            img = cv2.resize(img, None, fx=length_scale, fy=1)
-            img2 = cv2.resize(img2, None, fx=length_scale, fy=1)
+            l_scale = ((img.shape[0] / img.shape[1]) / (PWB_width_true / PWB_length_true))
+            img = cv2.resize(img, None, fx=l_scale, fy=1)
+            img2 = cv2.resize(img2, None, fx=l_scale, fy=1)
 
         # Converting image to a binary image (black and white only image).
         _, threshold = cv2.threshold(img, 110, 255, cv2.THRESH_BINARY)
 
         # Detecting contours in image.
         contours, _ = cv2.findContours(threshold, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        contours = list(contours)
 
         if img2 is not None:
             print('Resized image size (width, height, color): ' + str(img2.shape))
@@ -111,45 +112,61 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
                 count_rec = 0
                 # Going through every contour found in the image.
                 for cnt in contours:
-                    count_rec += 1
-                    approx = cv2.approxPolyDP(cnt, 0.009 * cv2.arcLength(cnt, True), True)
+                    if (len(cnt) != 4) or (cnt[0][0][0] != cnt[1][0][0]):
+                        count_rec += 1
+                        x, y, w, h = cv2.boundingRect(cnt)
+                        approx = cv2.approxPolyDP(cnt, 0.009 * cv2.arcLength(cnt, True), True)
+                        # draws boundary of contours.
+                        cv2.drawContours(img2, [approx], 0, (0, 0, 255), 2)
+                        cv2.rectangle(img2, (x, y), (x + w, y + h), (0, 255, 255), 2)
+                        cv2.putText(img2, str(count_rec), (x, y), font_ct, l_scale/200, (0, 255, 0))
+                        temp_index = contours.index(cnt)
+                        contours[temp_index] = np.array([[[x, y]], [[x, y + h]], [[x + w, y + h]], [[x + w, y]]])
 
-                    # draws boundary of contours.
-                    cv2.drawContours(img2, [approx], 0, (0, 0, 255), 3)
+                    else:
+                        count_rec += 1
+                        approx = cv2.approxPolyDP(cnt, 0.009 * cv2.arcLength(cnt, True), True)
+                        # draws boundary of contours.
+                        cv2.drawContours(img2, [approx], 0, (0, 0, 255), 2)
+                        # Used to flat the array containing the co-ordinates of the vertices.
+                        n = approx.ravel()
+                        num = 0
+                        for _ in n:
+                            if num % 2 == 0:
+                                x = n[num]
+                                y = n[num + 1]
 
-                    # Used to flat the array containing the co-ordinates of the vertices.
-                    n = approx.ravel()
-                    num = 0
-                    for _ in n:
-                        if num % 2 == 0:
-                            x = n[num]
-                            y = n[num + 1]
+                                if num == 0:
+                                    # text on topmost co-ordinate.
+                                    cv2.putText(img2, str(count_rec), (x, y),
+                                                font_ct, l_scale/200, (0, 255, 0))
+                            num += 1
 
-                            if num == 0:
-                                # text on topmost co-ordinate.
-                                cv2.putText(img2, "{}".format(count_rec), (x, y),
-                                            font_ct, l_scale/200, (0, 255, 0))
+                # for cnt in contours:
+                #     count_rec += 1
+                #     approx = cv2.approxPolyDP(cnt, 0.009 * cv2.arcLength(cnt, True), True)
+                #
+                #     # draws boundary of contours.
+                #     cv2.drawContours(img2, [approx], 0, (0, 0, 255), 3)
+                #
+                #     # Used to flat the array containing the co-ordinates of the vertices.
+                #     n = approx.ravel()
+                #     num = 0
+                #     for _ in n:
+                #         if num % 2 == 0:
+                #             x = n[num]
+                #             y = n[num + 1]
+                #
+                #             if num == 0:
+                #                 # text on topmost co-ordinate.
+                #                 cv2.putText(img2, str(count_rec), (x, y),
+                #                             font_ct, l_scale/200, (0, 255, 0))
+                #
+                #         num += 1
+                #
 
-                        num += 1
-
-                cv2.putText(img2, '{} microns'.format(scale_subsection[z]), (text_x, text_y),
-                            font_ct, 3 * l_scale / 400, color)
-        cv2.imwrite('Circuit Board Layout with conductor numbers.png', img2)
+        cv2.imwrite('Circuit Board Layout with Conductor Numbers.png', img2)
         return contours
-
-    # Function to compute region code for a point(x, y)
-    def computeCode(x, y, x_min, y_min, x_max, y_max):
-        code = INSIDE
-        if x < x_min:  # to the left of rectangle
-            code |= LEFT
-        elif x > x_max:  # to the right of rectangle
-            code |= RIGHT
-        if y < y_min:  # below the rectangle
-            code |= BOTTOM
-        elif y > y_max:  # above the rectangle
-            code |= TOP
-
-        return code
 
     # Function to randomly generate whisker on circuit board
     def whisker_generator():
@@ -209,6 +226,20 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
 
         return x_start, y_start, x_end, y_end, wsk_length, wsk_thickness, ratio_avg
 
+    # Function to compute region code for a point(x, y)
+    def computeCode(x, y, x_min, y_min, x_max, y_max):
+        code = INSIDE
+        if x < x_min:  # to the left of rectangle
+            code |= LEFT
+        elif x > x_max:  # to the right of rectangle
+            code |= RIGHT
+        if y < y_min:  # below the rectangle
+            code |= BOTTOM
+        elif y > y_max:  # above the rectangle
+            code |= TOP
+
+        return code
+
     # Cohen-Sutherland algorithm
     def cohenSutherland(x1, y1, x2, y2, m, c, x_min, y_min, x_max, y_max, bridged_rec, rec_num):
         # Compute region codes for P1, P2
@@ -217,29 +248,29 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
 
         # If both endpoints lie within rectangle
         if code1 == 0 and code2 == 0:
-            whisker_status = 1  # both endpoints are in region
+            rectangle_status = 1  # both endpoints are in region
 
         # If both endpoints are outside rectangle
         elif (code1 & code2) != 0:
-            whisker_status = 0  # outside region
+            rectangle_status = 0  # outside region
 
         else:
             if ((((m * x_min) + c) <= y_max) & (((m * x_min) + c) >= y_min)) \
                     or ((((m * x_max) + c) <= y_max) & (((m * x_max) + c) >= y_min)) \
                     or (((y_min - c) / m >= x_min) & ((y_min - c) / m <= x_max)) \
                     or (((y_max - c) / m >= x_min) & ((y_max - c) / m <= x_max)):
-                whisker_status = 0.5
+                rectangle_status = 0.5
                 bridged_rec.append(rec_num)
             else:
-                whisker_status = 0
+                rectangle_status = 0
 
-        return whisker_status, bridged_rec
+        return rectangle_status, bridged_rec
 
     # Function to determine if a whisker is bridging
     def check_Bridged():
         # Generating a whisker from P1 = (x_s, y_s) to P2 = (x_e, y_e)
         x_s, y_s, x_e, y_e, wsk_length, wsk_thickness, ratio_avg = whisker_generator()
-        wsk_status = []
+        rec_status = []
         # Creating a list to contain the rectangles which are bridged
         bridged_rectangle = []
 
@@ -257,16 +288,16 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
             y_max = rectangle[3]
             rectangle_num = Rectangle_list.index(rectangle) + 1
 
-            wsk_st, bridged_rectangle = cohenSutherland(x_s, y_s, x_e, y_e, m, c, x_min, y_min, x_max, y_max,
+            rec_st, bridged_rectangle = cohenSutherland(x_s, y_s, x_e, y_e, m, c, x_min, y_min, x_max, y_max,
                                                         bridged_rectangle, rectangle_num)
-            wsk_status.append(wsk_st)
+            rec_status.append(rec_st)
 
-        if wsk_status.count(0.5) >= 2:
+        if rec_status.count(0.5) >= 2:
             bridged = True
         else:
             bridged = False
 
-        return bridged, x_s, y_s, x_e, y_e, wsk_status, wsk_length, wsk_thickness, bridged_rectangle, ratio_avg
+        return bridged, x_s, y_s, x_e, y_e, rec_status, wsk_length, wsk_thickness, bridged_rectangle, ratio_avg
 
     # Function to calculate resistance of whisker
     def calculate_resistance(wsk_length, wsk_thickness, ratio_avg):
@@ -280,7 +311,7 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
     # Function to store the conductor pairs data as Dataframe
     def conductor_pair_DF():
         # Creating dataframe to store conductor pairs data
-        trial_list = []
+        run_list = []
         pair_list = []
         wsk_n_list = []
         for i in range(num_simulations):
@@ -290,19 +321,19 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
                 if len(pairs) == 2:
                     pair_list.append(pairs)
                     wsk_n_list.append(wsk_n[index])
-                    trial_list.append(i + 1)
+                    run_list.append(i + 1)
                 else:
                     list_combination = list(combinations(pairs, 2))
                     for t in list_combination:
                         pair_list.append(list(t))
                         wsk_n_list.append(wsk_n[index])
-                        trial_list.append(i + 1)
+                        run_list.append(i + 1)
 
         # Sheet 1 -------------------------------------------
-        data1 = {'Run Num.': trial_list,
+        data1 = {'Run Num.': run_list,
                  'Whisker Num.': wsk_n_list,
-                 '1st Conductor': [a[0] for a in pair_list],
-                 '2nd Conductor': [a[1] for a in pair_list],
+                 '1st Conductor': [i[0] for i in pair_list],
+                 '2nd Conductor': [i[1] for i in pair_list],
                  'Bridging Pairs': pair_list}
         df1 = DataFrame(data1)
         df1['Bridging Pairs'] = df1['Bridging Pairs'].agg(lambda x: ', '.join(map(str, x)))
@@ -573,7 +604,8 @@ def main_MCS(length_PWB, width_PWB, TWNum, SimNum, length_mu, length_sigma, thic
         f1 = plt.figure('Percentage of 1 or More Whiskers Bridging after {} simulations'.format(num_simulations))
         f1.set_figwidth(10)
         f1.set_figheight(5)
-        plt.title("Percentage of 1 or More Whiskers Bridging in Each Run (%) [" + str(num_simulations) + " simulations]")
+        plt.title("Percentage of 1 or More Whiskers Bridging in Each Run (%) "
+                  "[" + str(num_simulations) + " simulations]")
         plt.xlabel("Run Number")
         plt.ylabel("Percentage of 1 or More Whiskers Bridging (%)")
         plt.xlim([0, num_simulations])
